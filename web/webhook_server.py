@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="../templates")
 app.secret_key = "supersecretkey"
 
 DB_PATH = "bot.db"
