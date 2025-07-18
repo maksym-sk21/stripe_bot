@@ -1,6 +1,8 @@
 import os
 import asyncio
 import aiosqlite
+from aiohttp import web
+import stripe
 from aiogram import Bot, Dispatcher, Router, types
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -72,12 +74,41 @@ async def handle_payment_check(message: types.Message):
     else:
         await message.answer("❌ Оплата не найдена. Попробуй позже или свяжись с поддержкой.")
 
+
+async def stripe_webhook(request):
+    payload = await request.text()
+    sig_header = request.headers.get("stripe-signature")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+    except stripe.error.SignatureVerificationError:
+        return web.Response(status=400)
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        session_id = session.get("client_reference_id")
+
+        if session_id:
+            async with aiosqlite.connect("db.sqlite3") as db:
+                await db.execute("INSERT OR IGNORE INTO paid_sessions (session_id) VALUES (?)", (session_id,))
+                await db.commit()
+
+    return web.Response(status=200)
+
+
 async def main():
     await init_db()
     bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(router)
 
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 10000)
+    await site.start()
+    
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
