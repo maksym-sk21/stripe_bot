@@ -1,0 +1,16 @@
+<h1>👥 Пользователи</h1>
+<table border="1" cellpadding="5">
+  <tr>
+    <th>ID</th><th>Имя</th><th>Username</th><th>Session</th><th>Оплата</th><th>Действие</th>
+  </tr>
+  {% for u in users %}
+  <tr>
+    <td>{{ u[0] }}</td>
+    <td>{{ u[2] }}</td>
+    <td>@{{ u[1] }}</td>
+    <td>{{ u[3] }}</td>
+    <td>{% if u[4] %}✅{% else %}❌{% endif %}</td>
+    <td><a href="/mark_paid/{{ u[0] }}">Отметить оплачено</a></td>
+  </tr>
+  {% endfor %}
+</table>
