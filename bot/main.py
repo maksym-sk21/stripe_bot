@@ -159,10 +159,19 @@ async def admin_login(request):
 async def dashboard_page(request):
     if request.cookies.get("admin") != "1":
         return web.HTTPFound("/admin")
+        
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT telegram_id, username, first_name, session_id, is_paid FROM users")
-        users = await cursor.fetchall()
-    return {"users": users}
+        users = await db.execute_fetchall("SELECT id, username, full_name, session, paid FROM users")
+        sessions = await db.execute_fetchall("""
+            SELECT s.id, s.user_id, u.username, s.session_id, s.created_at
+            FROM sessions s
+            JOIN users u ON s.user_id = u.id
+            ORDER BY s.created_at DESC
+        """)
+    return aiohttp_jinja2.render_template("admin.html", request, {
+        "users": users,
+        "sessions": sessions,
+    })
 
 async def mark_paid_handler(request):
     if request.cookies.get("admin") != "1":
