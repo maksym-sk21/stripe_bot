@@ -7,6 +7,7 @@ from aiohttp import web
 from dotenv import load_dotenv
 import aiohttp_jinja2
 import jinja2
+from jinja2 import FileSystemLoader
 from aiogram import Bot, Dispatcher, Router, types
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -31,7 +32,7 @@ dp = Dispatcher()
 dp.include_router(router)
 
 app = web.Application()
-aiohttp_jinja2.setup(app, loader=jinja2.PackageLoader("bot", "templates"))
+aiohttp_jinja2.setup(app, loader=FileSystemLoader("templates"))
 
 # === Telegram UI ===
 check_payment_kb = ReplyKeyboardMarkup(
