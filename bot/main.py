@@ -200,7 +200,18 @@ async def delete_user_handler(request):
 async def bot_lifecycle(app):
     print("▶️ Startup")
     await init_db()
-    await dp.start_polling(bot)
+
+    task = asyncio.create_task(dp.start_polling(bot))
+    
+    app['bot_task'] = task
+    yield
+
+    print("⛔️ Shutting down bot polling...")
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 app.cleanup_ctx.append(bot_lifecycle)
