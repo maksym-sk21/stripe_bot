@@ -172,7 +172,7 @@ async def dashboard_page(request):
             ORDER BY created_at DESC
         """)
         
-    return aiohttp_jinja2.render_template("admin.html", request, {
+    return aiohttp_jinja2.render_template("dashboard.html", request, {
         "users": users,
         "sessions": sessions,
     })
