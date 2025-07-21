@@ -172,4 +172,12 @@ app.router.add_get("/mark_paid/{user_id}", mark_paid_handler)
 
 # === Запуск сервера ===
 if __name__ == "__main__":
-    web.run_app(app, port=int(os.getenv("PORT")), host="0.0.0.0", print=None, access_log=None)
+    port = int(os.environ["PORT"])
+    print(f"[Run] Starting server on port {port}")
+    web.run_app(
+        app,
+        port=port,
+        host="0.0.0.0",
+        on_startup=[on_startup],
+        on_shutdown=[on_shutdown]
+    )
