@@ -161,13 +161,17 @@ async def dashboard_page(request):
         return web.HTTPFound("/admin")
         
     async with aiosqlite.connect(DB_PATH) as db:
-        users = await db.execute_fetchall("SELECT id, username, full_name, session, paid FROM users")
-        sessions = await db.execute_fetchall("""
-            SELECT s.id, s.user_id, u.username, s.session_id, s.created_at
-            FROM sessions s
-            JOIN users u ON s.user_id = u.id
-            ORDER BY s.created_at DESC
+        users = await db.execute_fetchall("""
+            SELECT telegram_id, username, first_name, session_id, is_paid
+            FROM users
         """)
+        
+        sessions = await db.execute_fetchall("""
+            SELECT session_id, is_paid, created_at
+            FROM payments
+            ORDER BY created_at DESC
+        """)
+        
     return aiohttp_jinja2.render_template("admin.html", request, {
         "users": users,
         "sessions": sessions,
