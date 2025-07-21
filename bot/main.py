@@ -55,6 +55,13 @@ async def init_db():
                 is_paid INTEGER DEFAULT 0
             )
         ''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS payments (
+                session_id TEXT PRIMARY KEY,
+                is_paid INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         await db.commit()
 
 # === Telegram handlers ===
@@ -65,10 +72,18 @@ async def cmd_start(message: types.Message):
     username = message.from_user.username
     first_name = message.from_user.first_name
 
+    is_paid = 0
+    if session_id:
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute("SELECT is_paid FROM payments WHERE session_id = ?", (session_id,)) as cursor:
+                row = await cursor.fetchone()
+                if row and row[0] == 1:
+                    is_paid = 1
+
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute('''
             INSERT OR REPLACE INTO users (telegram_id, username, first_name, session_id, is_paid)
-            VALUES (?, ?, ?, ?, COALESCE((SELECT is_paid FROM users WHERE telegram_id = ?), 0))
+            VALUES (?, ?, ?, ?, ?)
         ''', (user_id, username, first_name, session_id, user_id))
         await db.commit()
 
@@ -107,10 +122,12 @@ async def stripe_webhook(request):
         session_id = event["data"]["object"].get("id")
         if session_id:
             async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute("UPDATE users SET is_paid = 1 WHERE session_id = ?", (session_id,))
+                await db.execute(
+                "INSERT OR IGNORE INTO payments (session_id, is_paid) VALUES (?, 1)",
+                (session_id,)
+                )
                 await db.commit()
-                print(f"[Stripe] Marked as paid: {session_id}")
-    return web.json_response({"success": True})
+            print(f"[Stripe] Оплата завершена, session_id сохранён: {session_id}")
 
 # === Telegram webhook ===
 async def telegram_handler(request):
@@ -156,6 +173,17 @@ async def mark_paid_handler(request):
         await db.commit()
     return web.HTTPFound("/dashboard")
 
+
+async def delete_user_handler(request):
+    if request.cookies.get("admin") != "1":
+        return web.HTTPFound("/admin")
+    user_id = int(request.match_info["user_id"])
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM users WHERE telegram_id = ?", (user_id,))
+        await db.commit()
+    return web.HTTPFound("/dashboard")
+
+
 async def bot_lifecycle(app):
     print("▶️ Startup")
     await init_db()
@@ -177,6 +205,8 @@ app.router.add_get("/admin", admin_form)
 app.router.add_post("/admin", admin_login)
 app.router.add_get("/dashboard", dashboard_page)
 app.router.add_get("/mark_paid/{user_id}", mark_paid_handler)
+app.router.add_get("/delete_user/{user_id}", delete_user_handler)
+
 
 # === Запуск сервера ===
 if __name__ == "__main__":
