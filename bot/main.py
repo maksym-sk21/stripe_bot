@@ -111,19 +111,59 @@ async def cmd_start(message: types.Message):
 @router.message(lambda msg: msg.text == "🔑 Проверить оплату и получить гайд")
 async def handle_payment_check(message: types.Message):
     user_id = message.from_user.id
+
+    await message.answer("⏳ Проверяю оплату, подождите...")
+    await asyncio.sleep(2)  # небольшая задержка
+
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute('SELECT is_paid FROM users WHERE telegram_id = ?', (user_id,)) as cursor:
-            row = await cursor.fetchone()
+        # Получим текущие данные пользователя
+        async with db.execute('SELECT session_id, is_paid FROM users WHERE telegram_id = ?', (user_id,)) as cursor:
+            user_row = await cursor.fetchone()
 
-    if row and row[0] == 1:
-        await message.answer("✅ Спасибо за оплату! Вот твой гайд:")
-        with open(GUIDE_PATH, "rb") as f:
-            file = BufferedInputFile(f.read(), filename="guide.pdf")
-            await message.answer_document(file)
-        await message.answer("📘 Завтра ты получишь первое задание!")
-    else:
-        await message.answer("❌ Оплата не найдена. Попробуй позже или свяжись с поддержкой.")
+        if not user_row:
+            await message.answer("❌ Вы не зарегистрированы. Нажмите /start сначала.")
+            return
 
+        session_id, is_paid = user_row
+
+        # Если уже оплачено — сразу даём доступ
+        if is_paid == 1:
+            await message.answer("✅ Оплата уже подтверждена. Вот твой гайд:")
+        else:
+            # Ищем первую НЕпривязанную session_id, у которой is_paid = 1
+            async with db.execute('''
+                SELECT session_id FROM payments
+                WHERE is_paid = 1
+                AND session_id NOT IN (SELECT session_id FROM users WHERE session_id IS NOT NULL)
+                ORDER BY created_at ASC
+                LIMIT 1
+            ''') as cursor:
+                new_session = await cursor.fetchone()
+
+            if new_session:
+                session_id = new_session[0]
+
+                # Привязываем session_id и обновляем is_paid
+                await db.execute('''
+                    UPDATE users
+                    SET session_id = ?, is_paid = 1
+                    WHERE telegram_id = ?
+                ''', (session_id, user_id))
+                await db.commit()
+
+                await message.answer("✅ Оплата найдена! Вот твой гайд:")
+            else:
+                await message.answer("❌ Оплата пока не найдена. Попробуй чуть позже.")
+                return
+
+        # Отправка гайда
+        try:
+            with open(GUIDE_PATH, "rb") as f:
+                file = BufferedInputFile(f.read(), filename="guide.pdf")
+                await message.answer_document(file)
+            await message.answer("📘 Завтра ты получишь первое задание!")
+        except FileNotFoundError:
+            await message.answer("⚠️ Гайд не найден на сервере.")
 # === Stripe webhook ===
 async def stripe_webhook(request):
     payload = await request.read()
