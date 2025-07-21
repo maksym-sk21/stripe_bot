@@ -154,14 +154,13 @@ async def mark_paid_handler(request):
 
 async def bot_lifecycle(app):
     print("▶️ Startup")
-    await create_db()
+    await init_db()
     await bot.delete_webhook(drop_pending_updates=True)
     asyncio.create_task(dp.start_polling(bot))
 
     yield  # ⬅️ пауза до остановки
 
     print("⛔ Shutdown")
-    await close_db()
     await bot.session.close()
 
 app.cleanup_ctx.append(bot_lifecycle)
