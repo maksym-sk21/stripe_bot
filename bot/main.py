@@ -84,7 +84,7 @@ async def cmd_start(message: types.Message):
         await db.execute('''
             INSERT OR REPLACE INTO users (telegram_id, username, first_name, session_id, is_paid)
             VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, username, first_name, session_id, user_id))
+        ''', (telegram_id, username, first_name, session_id, is_paid))
         await db.commit()
 
     await message.answer(
@@ -200,12 +200,15 @@ async def delete_user_handler(request):
 async def bot_lifecycle(app):
     print("▶️ Startup")
     await init_db()
-    await bot.delete_webhook(drop_pending_updates=True)
-    asyncio.create_task(dp.start_polling(bot))
+    webhook_url = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 
-    yield  # ⬅️ пауза до остановки
+    await bot.set_webhook(f"https://{webhook_url}/webhook_bot")
+    print(f"📡 Webhook set to: {webhook_url}")
+
+    yield
 
     print("⛔ Shutdown")
+    await bot.delete_webhook()
     await bot.session.close()
 
 app.cleanup_ctx.append(bot_lifecycle)
