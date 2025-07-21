@@ -18,18 +18,17 @@
   {% endfor %}
 </table>
 
-<h1>📄 Активные сессии</h1>
+
+<h1>💳 Оплаты</h1>
 <table border="1" cellpadding="5">
   <tr>
-    <th>ID</th><th>User ID</th><th>Username</th><th>Session ID</th><th>Created</th>
+    <th>Session ID</th><th>Оплата</th><th>Создано</th>
   </tr>
   {% for s in sessions %}
   <tr>
     <td>{{ s[0] }}</td>
-    <td>{{ s[1] }}</td>
-    <td>@{{ s[2] }}</td>
-    <td>{{ s[3] }}</td>
-    <td>{{ s[4] }}</td>
+    <td>{% if s[1] %}✅{% else %}❌{% endif %}</td>
+    <td>{{ s[2] }}</td>
   </tr>
   {% endfor %}
 </table>
