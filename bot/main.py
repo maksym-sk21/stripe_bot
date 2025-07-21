@@ -73,19 +73,35 @@ async def cmd_start(message: types.Message):
     first_name = message.from_user.first_name
 
     is_paid = 0
-    if session_id:
-        async with aiosqlite.connect(DB_PATH) as db:
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Проверим, была ли успешная оплата
+        if session_id:
             async with db.execute("SELECT is_paid FROM payments WHERE session_id = ?", (session_id,)) as cursor:
                 row = await cursor.fetchone()
                 if row and row[0] == 1:
                     is_paid = 1
 
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute('''
-            INSERT OR REPLACE INTO users (telegram_id, username, first_name, session_id, is_paid)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, username, first_name, session_id, is_paid))
-        await db.commit()
+        # Проверим, что никто ещё не привязан к этой оплате
+        async with db.execute("SELECT COUNT(*) FROM users WHERE session_id = ?", (session_id,)) as cursor:
+            row = await cursor.fetchone()
+            already_attached = row[0] > 0
+
+        # Привязываем только если никто не привязан
+        if session_id and not already_attached:
+            await db.execute('''
+                INSERT OR REPLACE INTO users (telegram_id, username, first_name, session_id, is_paid)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, username, first_name, session_id, is_paid))
+            await db.commit()
+
+        # Если пользователь уже в базе — не трогаем session_id
+        else:
+            await db.execute('''
+                INSERT OR IGNORE INTO users (telegram_id, username, first_name, session_id, is_paid)
+                VALUES (?, ?, ?, NULL, 0)
+            ''', (user_id, username, first_name))
+            await db.commit()
 
     await message.answer(
         "Привет! 👋 Я твой личный помощник.\n\nНажми кнопку ниже, чтобы проверить оплату и получить гайд.",
@@ -122,12 +138,14 @@ async def stripe_webhook(request):
         session_id = event["data"]["object"].get("id")
         if session_id:
             async with aiosqlite.connect(DB_PATH) as db:
-                await db.execute(
-                "INSERT OR IGNORE INTO payments (session_id, is_paid) VALUES (?, 1)",
-                (session_id,)
-                )
+                await db.execute('''
+                    INSERT OR IGNORE INTO payments (session_id, is_paid)
+                    VALUES (?, 1)
+                ''', (session_id,))
                 await db.commit()
-            print(f"[Stripe] Оплата завершена, session_id сохранён: {session_id}")
+            print(f"[Stripe] Оплата подтверждена, session_id: {session_id}")
+    
+    return web.Response(status=200)
 
 # === Telegram webhook ===
 async def telegram_handler(request):
