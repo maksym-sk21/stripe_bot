@@ -84,7 +84,7 @@ async def cmd_start(message: types.Message):
         await db.execute('''
             INSERT OR REPLACE INTO users (telegram_id, username, first_name, session_id, is_paid)
             VALUES (?, ?, ?, ?, ?)
-        ''', (telegram_id, username, first_name, session_id, is_paid))
+        ''', (user_id, username, first_name, session_id, is_paid))
         await db.commit()
 
     await message.answer(
