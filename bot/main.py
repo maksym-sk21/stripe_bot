@@ -24,6 +24,7 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 stripe.api_key = STRIPE_SECRET_KEY
+router = Router()
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -31,7 +32,6 @@ dp.include_router(router)
 
 app = web.Application()
 aiohttp_jinja2.setup(app, loader=jinja2.PackageLoader("bot", "templates"))
-router = Router()
 
 # === Telegram UI ===
 check_payment_kb = ReplyKeyboardMarkup(
