@@ -25,8 +25,12 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 stripe.api_key = STRIPE_SECRET_KEY
 
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher()
+dp.include_router(router)
+
 app = web.Application()
-aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader("templates"))
+aiohttp_jinja2.setup(app, loader=jinja2.PackageLoader("bot", "templates"))
 router = Router()
 
 # === Telegram UI ===
@@ -147,19 +151,19 @@ async def mark_paid_handler(request):
         await db.commit()
     return web.HTTPFound("/dashboard")
 
-# === Настройки aiogram + webhook ===
-bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher(storage=MemoryStorage())
-dp.include_router(router)
+async def bot_lifecycle(app):
+    print("▶️ Startup")
+    await create_db()
+    await bot.delete_webhook(drop_pending_updates=True)
+    asyncio.create_task(dp.start_polling(bot))
 
-async def on_startup(app):
-    await init_db()
-    webhook_url = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook_bot"
-    await bot.set_webhook(webhook_url)
-    print(f"[Start] Webhook set to {webhook_url}")
+    yield  # ⬅️ пауза до остановки
 
-async def on_shutdown(app):
-    await bot.delete_webhook()
+    print("⛔ Shutdown")
+    await close_db()
+    await bot.session.close()
+
+app.cleanup_ctx.append(bot_lifecycle)
 
 # === Роуты aiohttp ===
 app.router.add_post("/webhook_stripe", stripe_webhook)
@@ -174,10 +178,4 @@ app.router.add_get("/mark_paid/{user_id}", mark_paid_handler)
 if __name__ == "__main__":
     port = int(os.environ["PORT"])
     print(f"[Run] Starting server on port {port}")
-    web.run_app(
-        app,
-        port=port,
-        host="0.0.0.0",
-        on_startup=[on_startup],
-        on_shutdown=[on_shutdown]
-    )
+    web.run_app(app, port=port)
