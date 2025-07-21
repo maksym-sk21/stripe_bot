@@ -201,21 +201,24 @@ async def bot_lifecycle(app):
     print("▶️ Startup")
     await init_db()
     webhook_url = os.getenv("RENDER_EXTERNAL_HOSTNAME")
-
+    print(f"Webhook url: {webhook_url}")
     try:
         await bot.set_webhook(f"https://{webhook_url}/webhook_bot")
         print(f"📡 Webhook set to: https://{webhook_url}/webhook_bot")
     except Exception as e:
         print(f"❌ Failed to set webhook: {e}")
 
+    print("▶️ Yielding control, app should keep running now")
     yield  # Ждём, пока приложение работает
 
-    print("⛔ Shutdown")
+    print("⛔ Shutdown started")
     try:
         await bot.delete_webhook()
         await bot.session.close()
     except Exception as e:
         print(f"❌ Error during shutdown: {e}")
+    print("⛔ Shutdown finished")
+
 
 app.cleanup_ctx.append(bot_lifecycle)
 
