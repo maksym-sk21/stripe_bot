@@ -255,6 +255,30 @@ async def delete_user_handler(request):
     return web.HTTPFound("/dashboard")
 
 
+async def broadcast_handler(request):
+    if request.cookies.get("admin") != "1":
+        return web.HTTPFound("/admin")
+
+    data = await request.post()
+    text = data.get("message", "").strip()
+
+    if not text:
+        return web.HTTPFound("/dashboard")
+
+    sent = 0
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT telegram_id FROM users") as cursor:
+            async for row in cursor:
+                try:
+                    await bot.send_message(chat_id=row[0], text=text)
+                    sent += 1
+                except Exception as e:
+                    print(f"[Ошибка при рассылке {row[0]}]: {e}")
+
+    print(f"[Рассылка] Сообщение отправлено {sent} пользователям.")
+    return web.HTTPFound("/dashboard")
+
+
 async def bot_lifecycle(app):
     print("▶️ Startup")
     await init_db()
@@ -280,6 +304,7 @@ app.router.add_post("/webhook_bot", telegram_handler)
 app.router.add_get("/thanks", thanks_page)
 app.router.add_get("/admin", admin_form)
 app.router.add_post("/admin", admin_login)
+app.router.add_post("/broadcast", broadcast_handler)
 app.router.add_get("/dashboard", dashboard_page)
 app.router.add_get("/mark_paid/{user_id}", mark_paid_handler)
 app.router.add_get("/delete_user/{user_id}", delete_user_handler)
